@@ -1,7 +1,9 @@
 """Local transcription via faster-whisper.
 
-Model is loaded once and reused. On Apple Silicon the Metal GPU backend
-is selected automatically via device="auto".
+Model is loaded once and reused. CTranslate2 (faster-whisper's backend) does
+not support Apple Silicon MPS/Metal — transcription runs on CPU with optimized
+ARM NEON instructions. int8 quantization is used for fastest CPU inference.
+Speaker diarization (pyannote) runs on MPS separately.
 """
 import threading
 from pathlib import Path
@@ -22,7 +24,9 @@ def _get_model():
     with _model_lock:
         if _model is None:
             from faster_whisper import WhisperModel
-            _model = WhisperModel(_model_size, device="auto", compute_type="auto")
+            # CTranslate2 does not support MPS — use CPU with int8 for fastest
+            # inference on Apple Silicon (ARM NEON optimized).
+            _model = WhisperModel(_model_size, device="cpu", compute_type="int8")
         return _model
 
 

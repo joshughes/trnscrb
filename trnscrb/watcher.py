@@ -57,9 +57,11 @@ _NATIVE_APPS = [
 # "Slack Helper", "Teams Helper", "Discord Helper" etc. are ALWAYS present
 # when those apps are open, even when NOT in a meeting → false positives.
 # Only list processes that exist exclusively during an active session.
+#
+# NOTE: "FaceTime" was removed — on macOS 14+ FaceTime runs as a background
+# process for Continuity Camera and SharePlay even when no call is active.
 _ACTIVE_SESSION_PROCS = [
     "CptHost",   # Zoom: meeting capture host — only present during an active Zoom call
-    "FaceTime",  # FaceTime — only runs during an active call
     "Tuple",     # Tuple — only runs during an active screen-share session
 ]
 
