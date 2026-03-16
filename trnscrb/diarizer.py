@@ -21,11 +21,14 @@ def diarize(audio_path: Path, hf_token: str) -> list[dict]:
     if torch.backends.mps.is_available():
         pipeline = pipeline.to(torch.device("mps"))
 
-    diarization = pipeline(str(audio_path))
+    result = pipeline(str(audio_path))
+
+    # pyannote 3.x wraps output in DiarizeOutput; older versions return Annotation directly
+    annotation = getattr(result, "speaker_diarization", result)
 
     return [
         {"start": turn.start, "end": turn.end, "speaker": speaker}
-        for turn, _, speaker in diarization.itertracks(yield_label=True)
+        for turn, _, speaker in annotation.itertracks(yield_label=True)
     ]
 
 
