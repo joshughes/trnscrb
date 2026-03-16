@@ -69,7 +69,11 @@ class TrnscrbApp(rumps.App):
     # ── watcher ───────────────────────────────────────────────────────────────
 
     def _start_watcher(self):
-        self._watcher = MicWatcher(on_start=self._auto_start, on_stop=self._auto_stop)
+        self._watcher = MicWatcher(
+            on_start=self._auto_start,
+            on_stop=self._auto_stop,
+            is_recording=lambda: bool(self._recorder and self._recorder.is_recording),
+        )
         self._watcher.start()
         if not (self._recorder and self._recorder.is_recording):
             self._set_icon_state("watching")
@@ -119,13 +123,21 @@ class TrnscrbApp(rumps.App):
             evt = get_current_or_upcoming_event()
             meeting_name = evt["title"] if evt else ""
 
-        device = rec_module.Recorder.find_blackhole_device()
+        preferred = get_setting("input_device")
+        if preferred:
+            device = rec_module.Recorder.find_device_by_name(preferred)
+            if device is None:
+                rumps.notification("Trnscrb", "Device not found",
+                                   f"'{preferred}' unavailable, falling back to BlackHole")
+                device = rec_module.Recorder.find_blackhole_device()
+        else:
+            device = rec_module.Recorder.find_blackhole_device()
         self._recorder   = rec_module.Recorder(device=device)
         self._started_at = datetime.now()
         self._recorder.start()
         self._set_state("recording")
 
-        source = "BlackHole (system + mic)" if device is not None else "built-in mic"
+        source = preferred or ("BlackHole (system + mic)" if device is not None else "built-in mic")
         label  = f" — {meeting_name}" if meeting_name else ""
         rumps.notification("Trnscrb", f"Transcription started{label}", f"via {source}")
 
@@ -175,8 +187,8 @@ class TrnscrbApp(rumps.App):
             try:
                 diar     = diarizer.diarize(audio_path, hf_token)
                 segments = diarizer.merge(segments, diar)
-            except Exception:
-                pass
+            except Exception as e:
+                rumps.notification("Trnscrb", "Diarization failed", str(e)[:80])
 
         audio_path.unlink(missing_ok=True)
 

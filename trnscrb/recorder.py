@@ -28,10 +28,19 @@ class Recorder:
     def start(self) -> None:
         self._frames = []
         self._recording = True
+        # Query actual channel count — aggregate devices may have more than 1.
+        # Opening with fewer channels than the device supports causes an AUHAL
+        # error (-10863) when another app already has the device open.
+        if self.device is not None:
+            info = sd.query_devices(self.device)
+            channels = min(info["max_input_channels"], 2)
+        else:
+            channels = 1
+        self._channels = channels
         self._stream = sd.InputStream(
             device=self.device,
             samplerate=SAMPLE_RATE,
-            channels=1,
+            channels=channels,
             dtype="float32",
             callback=self._callback,
             blocksize=1024,
@@ -52,7 +61,10 @@ class Recorder:
         if not frames:
             return None
 
-        audio = np.concatenate(frames, axis=0).flatten()
+        audio = np.concatenate(frames, axis=0)
+        if audio.ndim > 1:
+            audio = audio.mean(axis=1)  # mix multi-channel down to mono for Whisper
+        audio = audio.flatten()
         audio_int16 = (audio * 32_767).astype(np.int16)
 
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
@@ -76,6 +88,14 @@ class Recorder:
     def find_blackhole_device() -> int | None:
         for i, dev in enumerate(sd.query_devices()):
             if "BlackHole" in dev["name"] and dev["max_input_channels"] > 0:
+                return i
+        return None
+
+    @staticmethod
+    def find_device_by_name(name: str) -> int | None:
+        """Find an input device by exact name. Returns None if not found."""
+        for i, dev in enumerate(sd.query_devices()):
+            if dev["name"] == name and dev["max_input_channels"] > 0:
                 return i
         return None
 

@@ -7,6 +7,7 @@ _SETTINGS_FILE = Path.home() / ".config" / "trnscrb" / "settings.json"
 _DEFAULTS: dict = {
     "auto_record": True,    # start watching for mic activity on launch
     "model_size": "small",  # whisper model
+    "input_device": None,   # audio input device name; None = auto-detect BlackHole
 }
 
 

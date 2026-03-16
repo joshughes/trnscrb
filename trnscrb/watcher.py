@@ -82,15 +82,22 @@ class MicWatcher:
     Polls CoreAudio every POLL_SECS seconds and fires:
       on_start(meeting_name: str)  — when a meeting is confirmed to have started
       on_stop()                    — when the meeting has ended
+
+    Pass is_recording so the watcher knows when trnscrb itself holds the audio
+    stream open.  Without this, is_mic_in_use() stays True after the meeting
+    app leaves (because our own recording stream keeps the device active) and
+    the watcher never transitions out of the recording state.
     """
 
     def __init__(
         self,
-        on_start: Callable[[str], None],
-        on_stop:  Callable[[], None],
+        on_start:     Callable[[str], None],
+        on_stop:      Callable[[], None],
+        is_recording: Callable[[], bool] | None = None,
     ):
-        self.on_start = on_start
-        self.on_stop  = on_stop
+        self.on_start     = on_start
+        self.on_stop      = on_stop
+        self.is_recording = is_recording or (lambda: False)
 
         self._thread: threading.Thread | None = None
         self._running  = False
@@ -153,15 +160,19 @@ class MicWatcher:
                     self.on_start(meeting_name)
 
             elif self._state == "recording":
-                if not active:
-                    # Mic went silent — start grace period immediately
+                # When trnscrb is recording it holds the audio stream open, so
+                # is_mic_in_use() stays True even after the meeting app leaves.
+                # Treat mic-idle as a stop signal only when we are NOT the ones
+                # holding the device.
+                we_own_stream = self.is_recording()
+                if not active and not we_own_stream:
+                    # Mic went silent and we're not recording — meeting ended
                     self._state        = "cooling"
                     self._since        = now
                     self._no_app_polls = 0
                 else:
-                    # Mic still active — periodically check if the meeting app is
-                    # still open.  Chrome keeps mic "warm" after leaving Meet, so
-                    # we need this secondary signal.
+                    # Periodically check if the meeting app is still open.
+                    # This is the primary stop signal when we own the stream.
                     _app_counter += 1
                     if _app_counter >= APP_POLL_EVERY:
                         _app_counter = 0
