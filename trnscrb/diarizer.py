@@ -14,7 +14,7 @@ def diarize(audio_path: Path, hf_token: str) -> list[dict]:
 
     pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization-3.1",
-        use_auth_token=hf_token,
+        token=hf_token,
     )
 
     # Prefer Apple Silicon Metal, fallback to CPU
